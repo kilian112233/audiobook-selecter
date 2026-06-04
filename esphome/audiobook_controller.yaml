@@ -49,14 +49,15 @@ spi:
   mosi_pin: GPIO6
   miso_pin: GPIO5
 
-# Display - 4.2" e-paper
+# Display - 4.2" e-paper using GxEPD2
 display:
   - platform: waveshare_epd
+    model: 4.2in-bw
     cs_pin: GPIO4
     dc_pin: GPIO2
     busy_pin: GPIO3
     reset_pin: GPIO1
-    model: 4.2in
+    spi_id: spi_bus
     update_interval: 10s
     lambda: |-
       // Title
