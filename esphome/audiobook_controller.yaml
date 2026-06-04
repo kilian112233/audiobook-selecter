@@ -126,24 +126,6 @@ font:
     size: 24
     glyphs: "▶⏸🎧"
 
-# Microphone for voice interaction
-microphone:
-  - platform: esp_adf
-    id: esp_adf_mic
-
-# Audio I2S for streaming
-i2s_audio:
-  - id: i2s_shared
-    i2s_num: 0
-
-# Microphone stream to Home Assistant for voice processing
-voice_assistant:
-  microphone: esp_adf_mic
-  speaker: i2s_audio
-  noise_suppression_level: 2
-  auto_gain: 80dB
-  volume_multiplier: 1.0
-
 # All Binary Sensors (GPIO Buttons + Home Assistant)
 binary_sensor:
   - platform: gpio
@@ -204,7 +186,7 @@ sensor:
     name: "ESP32 Internal Temperature"
     id: esp_temp
     
-  # Microphone level sensor
+  # Microphone/Audio level sensor (ADC)
   - platform: adc
     pin: GPIO3
     name: "Microphone Level"
