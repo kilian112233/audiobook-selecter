@@ -148,7 +148,7 @@ voice_assistant:
   auto_gain: 80dB
   volume_multiplier: 1.0
 
-# GPIO Buttons
+# All Binary Sensors (GPIO Buttons + Home Assistant)
 binary_sensor:
   - platform: gpio
     pin:
@@ -194,6 +194,12 @@ binary_sensor:
               service: script.audiobook_forward_30s
               data:
                 entity_id: media_player.bedroom
+
+  - platform: homeassistant
+    name: "Is Playing"
+    entity_id: media_player.bedroom
+    attribute: is_playing
+    id: is_playing
 
 # Sensors
 sensor:
@@ -258,11 +264,3 @@ text_sensor:
     name: "Humidity"
     entity_id: sensor.bedroom_humidity
     id: humidity
-
-# Home Assistant Binary Sensor
-binary_sensor:
-  - platform: homeassistant
-    name: "Is Playing"
-    entity_id: media_player.bedroom
-    attribute: is_playing
-    id: is_playing
