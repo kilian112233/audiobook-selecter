@@ -38,6 +38,94 @@ ota:
 logger:
   level: DEBUG
 
+# SPI for RLCD display
+spi:
+  clk_pin: GPIO7
+  mosi_pin: GPIO6
+  miso_pin: GPIO5
+
+# RLCD 4.2" Display - 300x400
+display:
+  - platform: st7789v
+    model: TTGO_T_Display_ST7789
+    backlight_pin: GPIO38
+    cs_pin: GPIO4
+    dc_pin: GPIO2
+    reset_pin: GPIO1
+    rotation: 0
+    update_interval: 10s
+    lambda: |-
+      // Title
+      it.printf(10, 5, id(font_title), "🎧 AUDIOBOOK");
+      it.line(10, 35, 290, 35);
+      
+      // Current track
+      it.printf(10, 45, id(font_medium), "Now Playing:");
+      if (id(current_track).has_state()) {
+        std::string title = id(current_track).state;
+        if (title.length() > 35) {
+          title = title.substr(0, 32) + "...";
+        }
+        it.printf(10, 70, id(font_small), "%s", title.c_str());
+      }
+      
+      // Album artist
+      if (id(media_artist).has_state()) {
+        std::string artist = id(media_artist).state;
+        if (artist.length() > 35) {
+          artist = artist.substr(0, 32) + "...";
+        }
+        it.printf(10, 85, id(font_small), "%s", artist.c_str());
+      }
+      
+      // Playback state
+      it.printf(10, 105, id(font_medium), "%s", id(is_playing).state ? "▶ PLAYING" : "⏸ PAUSED");
+      
+      // Progress bar
+      if (id(media_position).has_state() && id(media_duration).has_state()) {
+        float position = std::stof(id(media_position).state);
+        float duration = std::stof(id(media_duration).state);
+        if (duration > 0) {
+          int progress_width = (int)((position / duration) * 260);
+          it.filled_rectangle(10, 145, 260, 20);
+          it.filled_rectangle(10, 145, progress_width, 20, COLOR_ON);
+          it.rectangle(10, 145, 260, 20);
+        }
+      }
+      
+      // Time info
+      if (id(media_position).has_state() && id(media_duration).has_state()) {
+        it.printf(10, 175, id(font_small), "Position: %s / %s", 
+          id(media_position).state.c_str(), 
+          id(media_duration).state.c_str());
+      }
+      
+      // Current time
+      it.printf(10, 210, id(font_small), "Time: %s", id(current_time).state.c_str());
+      
+      // Environmental data
+      it.printf(10, 240, id(font_small), "Temp: %s°C", id(temperature).state.c_str());
+      it.printf(160, 240, id(font_small), "Humidity: %s%%", id(humidity).state.c_str());
+      
+      // Button instructions
+      it.line(10, 270, 290, 270);
+      it.printf(10, 280, id(font_small), "◀ Back 30s  |  ▶ Forward 30s");
+      it.printf(10, 310, id(font_small), "⏸ Play/Pause | Select via HA");
+
+# Fonts
+font:
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 12
+  - file: "gfonts://Roboto"
+    id: font_medium
+    size: 18
+    glyphs: "▶⏸🎧"
+  - file: "gfonts://Roboto"
+    id: font_title
+    size: 24
+    glyphs: "▶⏸🎧"
+
 # Microphone for voice interaction
 microphone:
   - platform: esp_adf
