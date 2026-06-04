@@ -31,12 +31,9 @@ captive_portal:
 
 # Home Assistant API
 api:
-  encryption:
-    key: !secret api_key
 
 ota:
   - platform: esphome
-    password: !secret ota_password
 
 logger:
   level: DEBUG
@@ -70,10 +67,19 @@ display:
       it.printf(10, 45, id(font_medium), "Now Playing:");
       if (id(current_track).has_state()) {
         std::string title = id(current_track).state;
-        if (title.length() > 40) {
-          title = title.substr(0, 37) + "...";
+        if (title.length() > 35) {
+          title = title.substr(0, 32) + "...";
         }
         it.printf(10, 70, id(font_small), "%s", title.c_str());
+      }
+      
+      // Album artist
+      if (id(media_artist).has_state()) {
+        std::string artist = id(media_artist).state;
+        if (artist.length() > 35) {
+          artist = artist.substr(0, 32) + "...";
+        }
+        it.printf(10, 85, id(font_small), "%s", artist.c_str());
       }
       
       // Playback state and time
@@ -101,7 +107,7 @@ display:
       // Current time
       it.printf(10, 210, id(font_small), "Time: %s", id(current_time).state.c_str());
       
-      // Environmental data (if sensors available)
+      // Environmental data
       it.printf(10, 240, id(font_small), "Temp: %s°C", id(temperature).state.c_str());
       it.printf(200, 240, id(font_small), "Humidity: %s%%", id(humidity).state.c_str());
       
@@ -123,6 +129,24 @@ font:
     id: font_title
     size: 24
     glyphs: "▶⏸🎧"
+
+# Microphone for voice interaction
+microphone:
+  - platform: esp_adf
+    id: esp_adf_mic
+
+# Audio I2S for streaming
+i2s_audio:
+  - id: i2s_shared
+    i2s_num: 0
+
+# Microphone stream to Home Assistant for voice processing
+voice_assistant:
+  microphone: esp_adf_mic
+  speaker: i2s_audio
+  noise_suppression_level: 2
+  auto_gain: 80dB
+  volume_multiplier: 1.0
 
 # GPIO Buttons
 binary_sensor:
@@ -171,6 +195,23 @@ binary_sensor:
               data:
                 entity_id: media_player.bedroom
 
+# Sensors
+sensor:
+  # Temperature sensor (onboard)
+  - platform: internal_temperature
+    name: "ESP32 Internal Temperature"
+    id: esp_temp
+    
+  # Microphone level sensor
+  - platform: adc
+    pin: GPIO3
+    name: "Microphone Level"
+    attenuation: 11db
+    update_interval: 1s
+    filters:
+      - multiply: 3.3
+      - delta: 0.01
+
 # Home Assistant Text Sensors
 text_sensor:
   - platform: homeassistant
@@ -190,6 +231,18 @@ text_sensor:
     entity_id: media_player.bedroom
     attribute: media_duration_minutes_display
     id: media_duration
+    
+  - platform: homeassistant
+    name: "Media Image URL"
+    entity_id: media_player.bedroom
+    attribute: entity_picture
+    id: media_image
+    
+  - platform: homeassistant
+    name: "Media Artist"
+    entity_id: media_player.bedroom
+    attribute: media_artist
+    id: media_artist
     
   - platform: homeassistant
     name: "Current Time"
