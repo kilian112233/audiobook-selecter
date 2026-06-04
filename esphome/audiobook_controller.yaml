@@ -49,16 +49,15 @@ spi:
   mosi_pin: GPIO6
   miso_pin: GPIO5
 
-# Display - 4.2" e-paper using GxEPD2
+# Display - Using IL0373 driver for 4.2" e-paper
 display:
-  - platform: waveshare_epd
-    model: 4.2in-bw
+  - platform: ili9xxx
+    model: M5STACK
     cs_pin: GPIO4
     dc_pin: GPIO2
-    busy_pin: GPIO3
     reset_pin: GPIO1
-    spi_id: spi_bus
     update_interval: 10s
+    rotation: 0
     lambda: |-
       // Title
       it.printf(10, 5, id(font_title), "🎧 AUDIOBOOK");
