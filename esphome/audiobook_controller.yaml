@@ -1,0 +1,215 @@
+substitutions:
+  name: audiobook-controller
+  friendly_name: Audiobook Controller
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  platformio_options:
+    board_build.mcu: esp32s3
+    board_build.f_cpu: 240000000L
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  framework:
+    type: esp-idf
+    version: latest
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
+
+# WiFi Configuration
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  
+  ap:
+    ssid: "Audiobook Controller"
+    password: "12345678"
+
+captive_portal:
+
+# Home Assistant API
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+logger:
+  level: DEBUG
+
+# Display Configuration
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+  frequency: 400kHz
+
+spi:
+  clk_pin: GPIO7
+  mosi_pin: GPIO6
+  miso_pin: GPIO5
+
+# Display - 4.2" e-paper
+display:
+  - platform: waveshare_epd
+    cs_pin: GPIO4
+    dc_pin: GPIO2
+    busy_pin: GPIO3
+    reset_pin: GPIO1
+    model: 4.2in
+    update_interval: 10s
+    lambda: |-
+      // Title
+      it.printf(10, 5, id(font_title), "🎧 AUDIOBOOK");
+      it.line(10, 35, 390, 35);
+      
+      // Current track
+      it.printf(10, 45, id(font_medium), "Now Playing:");
+      if (id(current_track).has_state()) {
+        std::string title = id(current_track).state;
+        if (title.length() > 40) {
+          title = title.substr(0, 37) + "...";
+        }
+        it.printf(10, 70, id(font_small), "%s", title.c_str());
+      }
+      
+      // Playback state and time
+      it.printf(10, 105, id(font_medium), "%s", id(is_playing).state ? "▶ PLAYING" : "⏸ PAUSED");
+      
+      // Progress bar
+      if (id(media_position).has_state() && id(media_duration).has_state()) {
+        float position = std::stof(id(media_position).state);
+        float duration = std::stof(id(media_duration).state);
+        if (duration > 0) {
+          int progress_width = (int)((position / duration) * 360);
+          it.filled_rectangle(10, 145, 360, 20);
+          it.filled_rectangle(10, 145, progress_width, 20, COLOR_ON);
+          it.rectangle(10, 145, 360, 20);
+        }
+      }
+      
+      // Time info
+      if (id(media_position).has_state() && id(media_duration).has_state()) {
+        it.printf(10, 175, id(font_small), "Position: %s / %s", 
+          id(media_position).state.c_str(), 
+          id(media_duration).state.c_str());
+      }
+      
+      // Current time
+      it.printf(10, 210, id(font_small), "Time: %s", id(current_time).state.c_str());
+      
+      // Environmental data (if sensors available)
+      it.printf(10, 240, id(font_small), "Temp: %s°C", id(temperature).state.c_str());
+      it.printf(200, 240, id(font_small), "Humidity: %s%%", id(humidity).state.c_str());
+      
+      // Button instructions
+      it.line(10, 270, 390, 270);
+      it.printf(10, 280, id(font_small), "◀ Back 30s  |  ▶ Forward 30s  |  ⏸ Play/Pause");
+      it.printf(10, 310, id(font_small), "Select audiobook via Home Assistant");
+
+# Fonts
+font:
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 12
+  - file: "gfonts://Roboto"
+    id: font_medium
+    size: 18
+    glyphs: "▶⏸🎧"
+  - file: "gfonts://Roboto"
+    id: font_title
+    size: 24
+    glyphs: "▶⏸🎧"
+
+# GPIO Buttons
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO0
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    name: "Button 1 (Play/Pause)"
+    id: button1
+    on_press:
+      then:
+        - homeassistant.service:
+            service: media_player.media_play_pause
+            data:
+              entity_id: media_player.bedroom
+    debounce: 50ms
+
+  - platform: gpio
+    pin:
+      number: GPIO46
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    name: "Button 2 (±30s)"
+    id: button2
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+    on_click:
+      - min_length: 50ms
+        max_length: 500ms
+        then:
+          - homeassistant.service:
+              service: script.audiobook_rewind_30s
+              data:
+                entity_id: media_player.bedroom
+      - min_length: 500ms
+        max_length: 5000ms
+        then:
+          - homeassistant.service:
+              service: script.audiobook_forward_30s
+              data:
+                entity_id: media_player.bedroom
+
+# Home Assistant Text Sensors
+text_sensor:
+  - platform: homeassistant
+    name: "Current Track"
+    entity_id: media_player.bedroom
+    attribute: media_title
+    id: current_track
+    
+  - platform: homeassistant
+    name: "Media Position"
+    entity_id: media_player.bedroom
+    attribute: media_position_minutes_display
+    id: media_position
+    
+  - platform: homeassistant
+    name: "Media Duration"
+    entity_id: media_player.bedroom
+    attribute: media_duration_minutes_display
+    id: media_duration
+    
+  - platform: homeassistant
+    name: "Current Time"
+    entity_id: sensor.time
+    id: current_time
+    
+  - platform: homeassistant
+    name: "Temperature"
+    entity_id: sensor.bedroom_temperature
+    id: temperature
+    
+  - platform: homeassistant
+    name: "Humidity"
+    entity_id: sensor.bedroom_humidity
+    id: humidity
+
+# Home Assistant Binary Sensor
+binary_sensor:
+  - platform: homeassistant
+    name: "Is Playing"
+    entity_id: media_player.bedroom
+    attribute: is_playing
+    id: is_playing

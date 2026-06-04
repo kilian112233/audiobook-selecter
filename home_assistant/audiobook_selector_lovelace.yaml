@@ -1,0 +1,107 @@
+# Audiobook Selector Dashboard Card
+# Add this to your Home Assistant Lovelace dashboard
+# This is a simple interface for your dad to select audiobooks
+
+views:
+  - title: 🎧 Audiobook Selector
+    path: audiobook
+    icon: mdi:book-open-variant
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: |
+              # 🎧 Select Your Audiobook
+              **Tap an audiobook to start playing on your bedroom speaker**
+
+          # Main player card - shows what's currently playing
+          - type: custom:mushroom-media-player-card
+            entity: media_player.bedroom
+            icon: mdi:speaker-wireless
+            use_media_info: true
+            use_track_info: true
+            volume_control: volume-set
+            media_controls:
+              - play-pause
+
+          - type: markdown
+            content: "---"
+
+          # Quick access buttons for favorite audiobooks
+          # Update these with your actual audiobook names
+          - type: vertical-stack
+            title: Quick Select Audiobooks
+            cards:
+              # Button 1: Play audiobook
+              - type: custom:button-card
+                entity: media_player.bedroom
+                name: 📚 Audiobook 1
+                state_color: true
+                tap_action:
+                  action: call-service
+                  service: media_player.play_media
+                  service_data:
+                    entity_id: media_player.bedroom
+                    media_content_type: playlist
+                    media_content_id: "media-source://music_assistant/playlists/Audiobook 1"
+                card_mod:
+                  style:
+                    card: |
+                      ha-card {
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      }
+
+              # Button 2: Play audiobook
+              - type: custom:button-card
+                entity: media_player.bedroom
+                name: 📚 Audiobook 2
+                state_color: true
+                tap_action:
+                  action: call-service
+                  service: media_player.play_media
+                  service_data:
+                    entity_id: media_player.bedroom
+                    media_content_type: playlist
+                    media_content_id: "media-source://music_assistant/playlists/Audiobook 2"
+                card_mod:
+                  style:
+                    card: |
+                      ha-card {
+                        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                      }
+
+              # Button 3: Play audiobook
+              - type: custom:button-card
+                entity: media_player.bedroom
+                name: 📚 Audiobook 3
+                state_color: true
+                tap_action:
+                  action: call-service
+                  service: media_player.play_media
+                  service_data:
+                    entity_id: media_player.bedroom
+                    media_content_type: playlist
+                    media_content_id: "media-source://music_assistant/playlists/Audiobook 3"
+                card_mod:
+                  style:
+                    card: |
+                      ha-card {
+                        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+                      }
+
+          - type: markdown
+            content: "---"
+
+          # Current status
+          - type: entities
+            title: Current Status
+            entities:
+              - entity: media_player.bedroom
+                name: Bedroom Speaker
+
+          # Music Assistant library access
+          - type: markdown
+            content: |
+              **Access full Music Assistant library:**
+              Go to: Services → Media Player → Play Media
+              Then select from your audiobook collection

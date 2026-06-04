@@ -1,0 +1,19 @@
+audiobook_rewind_30s:
+  alias: "Audiobook Rewind 30s"
+  description: "Rewind audiobook by 30 seconds on bedroom speaker"
+  sequence:
+    - service: media_player.media_seek
+      target:
+        entity_id: media_player.bedroom
+      data:
+        seek_position: "{{ [0, (state_attr('media_player.bedroom', 'media_position') or 0) - 30] | max }}"
+
+audiobook_forward_30s:
+  alias: "Audiobook Forward 30s"
+  description: "Forward audiobook by 30 seconds on bedroom speaker"
+  sequence:
+    - service: media_player.media_seek
+      target:
+        entity_id: media_player.bedroom
+      data:
+        seek_position: "{{ (state_attr('media_player.bedroom', 'media_position') or 0) + 30 }}"
