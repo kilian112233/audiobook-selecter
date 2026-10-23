@@ -5,6 +5,12 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
+  includes:
+    - mic_stream.h
+  on_boot:
+    priority: -100
+    then:
+      - lambda: 'mic_stream::start();'
   platformio_options:
     board_build.mcu: esp32s3
     board_build.f_cpu: 240000000L
@@ -15,6 +21,9 @@ esp32:
   framework:
     type: esp-idf
     version: latest
+    advanced:
+      include_builtin_idf_components:
+        - esp_adc
     sdkconfig_options:
       CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
 
@@ -47,7 +56,11 @@ spi:
 # RLCD 4.2" Display - 300x400
 display:
   - platform: st7789v
-    model: TTGO_T_Display_ST7789
+    model: CUSTOM
+    height: 400
+    width: 300
+    offset_height: 0
+    offset_width: 0
     backlight_pin: GPIO38
     cs_pin: GPIO4
     dc_pin: GPIO2
@@ -56,7 +69,7 @@ display:
     update_interval: 10s
     lambda: |-
       // Title
-      it.printf(10, 5, id(font_title), "🎧 AUDIOBOOK");
+      it.printf(10, 5, id(font_title), "AUDIOBOOK");
       it.line(10, 35, 290, 35);
       
       // Current track
@@ -79,7 +92,7 @@ display:
       }
       
       // Playback state
-      it.printf(10, 105, id(font_medium), "%s", id(is_playing).state ? "▶ PLAYING" : "⏸ PAUSED");
+      it.printf(10, 105, id(font_medium), "%s", id(is_playing).state ? "PLAYING" : "PAUSED");
       
       // Progress bar
       if (id(media_position).has_state() && id(media_duration).has_state()) {
@@ -109,8 +122,8 @@ display:
       
       // Button instructions
       it.line(10, 270, 290, 270);
-      it.printf(10, 280, id(font_small), "◀ Back 30s  |  ▶ Forward 30s");
-      it.printf(10, 310, id(font_small), "⏸ Play/Pause | Select via HA");
+      it.printf(10, 280, id(font_small), "< Back 30s  |  > Forward 30s");
+      it.printf(10, 310, id(font_small), "Play/Pause | Select via HA");
 
 # Fonts
 font:
@@ -120,11 +133,9 @@ font:
   - file: "gfonts://Roboto"
     id: font_medium
     size: 18
-    glyphs: "▶⏸🎧"
   - file: "gfonts://Roboto"
     id: font_title
     size: 24
-    glyphs: "▶⏸🎧"
 
 # All Binary Sensors (GPIO Buttons + Home Assistant)
 binary_sensor:
@@ -143,7 +154,9 @@ binary_sensor:
             service: media_player.media_play_pause
             data:
               entity_id: media_player.bedroom
-    debounce: 50ms
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
 
   - platform: gpio
     pin:
@@ -186,15 +199,10 @@ sensor:
     name: "ESP32 Internal Temperature"
     id: esp_temp
     
-  # Microphone/Audio level sensor (ADC)
-  - platform: adc
-    pin: GPIO3
-    name: "Microphone Level"
-    attenuation: 11db
-    update_interval: 1s
-    filters:
-      - multiply: 3.3
-      - delta: 0.01
+# Microphone: analog mic on GPIO3 (ADC1_CH2) is streamed live by mic_stream.h
+# at http://<device-ip>:8080/mic (16 kHz 16-bit mono WAV). The old
+# "Microphone Level" level sensor was removed — ADC1 can't run both
+# continuous sampling and the 1s level sensor at once.
 
 # Home Assistant Text Sensors
 text_sensor:
