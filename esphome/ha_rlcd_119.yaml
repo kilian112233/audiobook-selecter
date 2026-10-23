@@ -1,0 +1,340 @@
+﻿substitutions:
+  name: audiobook-controller
+  friendly_name: Audiobook Controller
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  includes:
+    - audio_streamer.h
+  platformio_options:
+    board_build.mcu: esp32s3
+    board_build.f_cpu: 240000000L
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  framework:
+    type: esp-idf
+    version: latest
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: 192.168.8.119
+    gateway: 192.168.8.1
+    subnet: 255.255.255.0
+  
+  ap:
+    ssid: "Audiobook Controller"
+    password: "12345678"
+
+  use_address: 192.168.8.119
+captive_portal:
+http_request:
+
+api:
+  services:
+    - service: play_audiobook
+      variables:
+        entity_id: string
+      then:
+        - homeassistant.service:
+            service: media_player.media_play
+            data:
+              entity_id: !lambda 'return entity_id;'
+    
+    - service: pause_audiobook
+      variables:
+        entity_id: string
+      then:
+        - homeassistant.service:
+            service: media_player.media_pause
+            data:
+              entity_id: !lambda 'return entity_id;'
+    
+    - service: start_mic_stream
+      then:
+        - logger.log: "Audio stream started"
+
+ota:
+  - platform: esphome
+
+logger:
+  level: DEBUG
+  baud_rate: 115200
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+external_components:
+  - source: github://kylehase/ESPHome-ST7305-RLCD
+    components: [st7305_rlcd]
+
+# ===== I2C (SHTC3 Sensor & ES7210 Mic) =====
+i2c:
+  sda: GPIO13
+  scl: GPIO14
+  scan: true
+  id: i2c_bus
+
+audio_adc:
+  - platform: es7210
+    id: es7210_adc
+    bits_per_sample: 16bit
+    sample_rate: 16000
+    mic_gain: 37.5db
+
+# ===== SPI (Display) =====
+spi:
+  clk_pin: GPIO11
+  mosi_pin: GPIO12
+
+# ===== DISPLAY CONFIGURATION =====
+display:
+  - platform: st7305_rlcd
+    model: WAVESHARE_400X300
+    id: my_display
+    cs_pin: GPIO40
+    dc_pin: GPIO5
+    reset_pin: GPIO41
+    data_rate: 1MHz
+    update_interval: 1s
+    lambda: |-
+      // --- TOP STATUS BAR (IP & TIME) ---
+      it.printf(210, 2, id(font_medium), "192.168.8.119");
+      if (id(ha_time).now().is_valid()) {
+        it.printf(210, 22, id(font_medium), "%.2d:%.2d", id(ha_time).now().hour, id(ha_time).now().minute);
+      }
+
+      // --- BOTTOM STATUS BAR (TEMP & HUMIDITY) ---
+      if (id(shtc3_temp).has_state()) {
+        it.printf(5, 272, id(font_medium), "T:%.1fC", id(shtc3_temp).state);
+      }
+      if (id(shtc3_hum).has_state()) {
+        it.printf(130, 272, id(font_medium), "H:%.0f%%", id(shtc3_hum).state);
+      }
+      
+      // --- MAIN CONTENT ---
+      if (id(is_playing).state) {
+        it.printf(5, 42, id(font_large), "AUDIOBOOK");
+        if (id(current_track).has_state()) {
+          std::string track = id(current_track).state.c_str();
+          if (track.length() > 38) track = track.substr(0, 35) + "...";
+          it.printf(5, 68, id(font_medium), "%s", track.c_str());
+        }
+        int bar_width = 290;
+        int progress = 0;
+        float position = 0;
+        float duration = 0;
+        if (id(media_position).has_state() && id(media_duration).has_state() && id(media_duration).state > 0) {
+          position = id(media_position).state;
+          duration = id(media_duration).state;
+          progress = (int)((position / duration) * bar_width);
+        }
+        it.rectangle(5, 95, bar_width, 10, COLOR_ON);
+        if (progress > 0) it.filled_rectangle(5, 95, progress, 10, COLOR_ON);
+        it.line(bar_width/4 + 5, 93, bar_width/4 + 5, 107, COLOR_ON);
+        it.line(bar_width/2 + 5, 93, bar_width/2 + 5, 107, COLOR_ON);
+        it.line(3*bar_width/4 + 5, 93, 3*bar_width/4 + 5, 107, COLOR_ON);
+        if (progress > 0 && progress < bar_width) it.line(progress + 5, 91, progress + 5, 109, COLOR_ON);
+        if (id(media_position).has_state() && id(media_duration).has_state()) {
+          int pos_min = (int)position / 60; int pos_sec = (int)position % 60;
+          int dur_min = (int)duration / 60; int dur_sec = (int)duration % 60;
+          int rem_min = dur_min - pos_min; int rem_sec = dur_sec - pos_sec;
+          if (rem_sec < 0) { rem_min--; rem_sec += 60; }
+          char time_str[40];
+          snprintf(time_str, sizeof(time_str), ">%d:%02d / %d:%02d", pos_min, pos_sec, dur_min, dur_sec);
+          it.printf(5, 115, id(font_medium), "%s", time_str);
+          snprintf(time_str, sizeof(time_str), "- %d:%02d left", rem_min, rem_sec);
+          it.printf(5, 138, id(font_small), "%s", time_str);
+          int percent = (int)((position / duration) * 100);
+          snprintf(time_str, sizeof(time_str), "%d%% complete", percent);
+          it.printf(180, 138, id(font_small), "%s", time_str);
+        }
+        it.printf(5, 160, id(font_medium), "[PLAYING]");
+        it.printf(5, 185, id(font_small), "P1: Play/Pause  P2: Next/Prev");
+      } else {
+        it.printf(5, 90, id(font_large), "AUDIOBOOK");
+        it.printf(5, 130, id(font_medium), "[PAUSED]");
+        it.printf(5, 160, id(font_small), "Ready to play");
+        it.printf(5, 185, id(font_small), "P1: Play/Pause  P2: Next/Prev");
+        if (id(current_track).has_state()) {
+          std::string track = id(current_track).state.c_str();
+          if (track.length() > 38) track = track.substr(0, 35) + "...";
+          char last_str[45];
+          snprintf(last_str, sizeof(last_str), "Last: %s", track.c_str());
+          it.printf(5, 210, id(font_small), "%s", last_str);
+        }
+      }
+
+# ===== FONTS =====
+font:
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 14
+  - file: "gfonts://Roboto"
+    id: font_medium
+    size: 20
+  - file: "gfonts://Roboto"
+    id: font_large
+    size: 32
+
+# ===== BUTTONS =====
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO7
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    name: "Button Play Stop"
+    id: button_play
+    filters:
+      - delayed_on: 10ms
+    on_click:
+      - min_length: 50ms
+        max_length: 1000ms
+        then:
+          - homeassistant.service:
+              service: media_player.media_play_pause
+              data:
+                entity_id: media_player.bedroom
+      - min_length: 1000ms
+        max_length: 10000ms
+        then:
+          - homeassistant.service:
+              service: media_player.media_stop
+              data:
+                entity_id: media_player.bedroom
+
+  - platform: gpio
+    pin:
+      number: GPIO8
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    name: "Button Next Prev"
+    id: button_skip
+    filters:
+      - delayed_on: 10ms
+    on_click:
+      - min_length: 50ms
+        max_length: 1000ms
+        then:
+          - homeassistant.service:
+              service: media_player.media_next_track
+              data:
+                entity_id: media_player.bedroom
+      - min_length: 1000ms
+        max_length: 10000ms
+        then:
+          - homeassistant.service:
+              service: media_player.media_previous_track
+              data:
+                entity_id: media_player.bedroom
+
+  - platform: homeassistant
+    name: "Is Playing"
+    entity_id: media_player.bedroom
+    attribute: is_playing
+    id: is_playing
+
+# ===== SENSORS =====
+sensor:
+  - platform: shtcx
+    temperature:
+      name: "Audiobook Temperature"
+      id: shtc3_temp
+      unit_of_measurement: "Â°C"
+    humidity:
+      name: "Audiobook Humidity"
+      id: shtc3_hum
+      unit_of_measurement: "%"
+    update_interval: 60s
+    address: 0x70
+
+  - platform: internal_temperature
+    name: "ESP32 Internal Temperature"
+    id: esp_temp
+
+  - platform: homeassistant
+    name: "Media Position"
+    entity_id: media_player.bedroom
+    attribute: media_position
+    id: media_position
+
+  - platform: homeassistant
+    name: "Media Duration"
+    entity_id: media_player.bedroom
+    attribute: media_duration
+    id: media_duration
+
+  - platform: adc
+    pin: GPIO4
+    name: "Audiobook Battery Voltage"
+    id: battery_voltage
+    attenuation: 12db
+    update_interval: 60s
+
+  - platform: copy
+    source_id: battery_voltage
+    name: "Audiobook Battery Level"
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    filters:
+      - multiply: 2.0
+      - lambda: |
+          if (x <= 3.0) return 0.0;
+          if (x >= 4.2) return 100.0;
+          return (x - 3.0) * (100.0 / 1.2);
+
+# ===== TEXT SENSORS =====
+text_sensor:
+  - platform: homeassistant
+    name: "Current Track"
+    entity_id: media_player.bedroom
+    attribute: media_title
+    id: current_track
+
+# ===== CORRECTED AUDIO HARDWARE FOR WAVESHARE RLCD-4.2 =====
+i2s_audio:
+  - id: i2s_shared
+    i2s_lrclk_pin: GPIO45
+    i2s_bclk_pin: GPIO9
+    i2s_mclk_pin: GPIO16
+
+microphone:
+  - platform: i2s_audio
+    id: board_mic
+    i2s_audio_id: i2s_shared
+    i2s_din_pin: GPIO10
+    adc_type: external
+    sample_rate: 16000
+    bits_per_sample: 16bit
+    channel: left
+    pdm: false
+
+# ===== AUDIO STREAMER LOOP =====
+interval:
+  - interval: 10ms
+    then:
+      - lambda: |-
+          static AudioStreamer *streamer = nullptr;
+          if (streamer == nullptr) {
+            streamer = new AudioStreamer();
+            streamer->mic = id(board_mic);
+            streamer->i2c_bus_ptr = id(i2c_bus); // Pass the I2C bus so C++ can wake up the ES7210
+          }
+          streamer->loop();
